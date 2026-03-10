@@ -192,6 +192,5 @@ for i, batch_data in tqdm(enumerate(dataloader), disable=(local_rank != 0)):
                 output_path = os.path.join(args.output_folder, f'{idx}-{seed_idx}_{model}.mp4')
             else:
                 output_path = os.path.join(args.output_folder, f'{prompt[:100]}-{seed_idx}.mp4')
-            write_video(output_path, video[seed_idx], fps=16)
-            # imageio.mimwrite(output_path, video[seed_idx], fps=16, quality=8, output_params=["-loglevel", "error"])
+            imageio.mimwrite(output_path, video[seed_idx].to(torch.uint8).numpy(), fps=16, quality=8, output_params=["-loglevel", "error"])
     
