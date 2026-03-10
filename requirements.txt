@@ -37,7 +37,7 @@ onnxscript
 onnxconverter_common
 flask
 flask-socketio
-torchao
+torchao==0.6.1
 tensorboard
 ninja
 packaging
