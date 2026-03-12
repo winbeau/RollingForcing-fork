@@ -5,7 +5,7 @@ set -euo pipefail
 # Batch inference script for Rolling Forcing
 #
 # Usage:
-#   bash scripts/infer_bench.sh --num_gpus 4 --num_output_frames 126
+#   bash scripts/infer_bench.sh --num_gpus 4 --num_output_frames 120
 #
 # Output:
 #   OUTPUT_DIR/prompts.csv         — index,prompt mapping
@@ -18,7 +18,7 @@ CHECKPOINT="checkpoints/rolling_forcing_dmd.pt"
 PROMPTS="prompts/MovieGenVideoBench_num32.txt"
 OUTPUT_DIR="videos/MovieGenVideoBench_num32"
 NUM_GPUS=1
-NUM_OUTPUT_FRAMES=126
+NUM_OUTPUT_FRAMES=120
 MASTER_PORT="${MASTER_PORT:-29501}"
 
 die() {

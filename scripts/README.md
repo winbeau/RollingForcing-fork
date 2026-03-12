@@ -14,7 +14,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 MASTER_PORT=29501 bash scripts/infer_bench.sh --num
 # Custom settings
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 MASTER_PORT=29511 bash scripts/infer_bench.sh \
     --num_gpus 8 \
-    --num_output_frames 126 \
+    --num_output_frames 120 \
     --output_dir videos/my_experiment
 ```
 
@@ -33,7 +33,7 @@ If the visible GPU count does not match `--num_gpus`, the script exits before la
 | `--prompts` | `prompts/MovieGenVideoBench_num32.txt` | Prompt file (one prompt per line) |
 | `--output_dir` | `videos/MovieGenVideoBench_num32` | Output directory |
 | `--num_gpus` | `1` | Number of worker processes for inference; must match the number of GPUs visible through `CUDA_VISIBLE_DEVICES` |
-| `--num_output_frames` | `126` | Number of **latent** frames to generate (see below) |
+| `--num_output_frames` | `120` | Number of **latent** frames to generate (see below) |
 
 Environment variables:
 
@@ -93,9 +93,9 @@ duration     = pixel_frames / 16 fps
 | 42 | 165 | ~10.3 s |
 | 63 | 249 | ~15.6 s |
 | 84 | 333 | ~20.8 s |
-| **126** (script default) | **501** | **~31.3 s** |
+| **120** (script default) | **477** | **~29.8 s** |
 
-Constraint: `num_output_frames` must be divisible by `num_frame_per_block` (= **3**). Valid values: 21, 24, 27, ..., 126, ...
+Constraint: `num_output_frames` must be divisible by `num_frame_per_block` (= **3**). Valid values: 21, 24, 27, ..., 120, ...
 
 ### Latent Space
 
@@ -234,14 +234,14 @@ Negative prompt (from config):
 | Independent first frame | False |
 | Uniform timestep per block (`same_step_across_blocks`) | True |
 
-Frames are grouped into blocks of 3 latent frames for joint denoising. With `--num_output_frames 126`, this yields **42 blocks**.
+Frames are grouped into blocks of 3 latent frames for joint denoising. With `--num_output_frames 120`, this yields **40 blocks**.
 
 ### Rolling Window
 
 | Parameter | Value |
 |---|---|
 | Rolling window length | **5 blocks** (= number of denoising steps) |
-| Total windows | `num_blocks + window_length - 1` = 42 + 5 - 1 = **46 windows** |
+| Total windows | `num_blocks + window_length - 1` = 40 + 5 - 1 = **44 windows** |
 | Context noise | 0 (clean context, no noise on previously denoised blocks) |
 
 The rolling window slides one block at a time: each window covers up to 5 consecutive blocks. Blocks within the window are assigned decreasing noise levels from the denoising step list.
@@ -289,9 +289,9 @@ For reproducibility, each GPU gets `seed + local_rank`. With 4 GPUs, seeds are 0
 |---|---|
 | Resolution | 480 x 832 |
 | FPS | 16 |
-| Latent frames | 126 |
-| Pixel frames | 501 |
-| Duration | ~31.3 s |
+| Latent frames | 120 |
+| Pixel frames | 477 |
+| Duration | ~29.8 s |
 | Model | Wan2.1-T2V-1.3B (Causal) |
 | Weights | EMA (weight=0.99) |
 | Precision | bfloat16 |

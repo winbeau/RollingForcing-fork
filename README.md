@@ -54,7 +54,7 @@ python inference.py \
     --output_folder videos/rolling_forcing_dmd \
     --checkpoint_path checkpoints/rolling_forcing_dmd.pt \
     --data_path prompts/example_prompts.txt \
-    --num_output_frames 126 \
+    --num_output_frames 120 \
     --use_ema
 ```
 
