@@ -19,6 +19,7 @@ PROMPTS="prompts/MovieGenVideoBench_num32.txt"
 OUTPUT_DIR="videos/MovieGenVideoBench_num32"
 NUM_GPUS=1
 NUM_OUTPUT_FRAMES=126
+MASTER_PORT="${MASTER_PORT:-29501}"
 
 die() {
     echo "ERROR: $*" >&2
@@ -40,6 +41,10 @@ done
 
 if ! [[ "$NUM_GPUS" =~ ^[1-9][0-9]*$ ]]; then
     die "--num_gpus must be a positive integer, got: $NUM_GPUS"
+fi
+
+if ! [[ "$MASTER_PORT" =~ ^[1-9][0-9]*$ ]] || [[ "$MASTER_PORT" -gt 65535 ]]; then
+    die "MASTER_PORT must be an integer in [1, 65535], got: $MASTER_PORT"
 fi
 
 # Validate prompt file exists
@@ -86,13 +91,14 @@ fi
 # 2. Launch inference in the background
 # ---------------------------------------------------------------------------
 if [[ $NUM_GPUS -gt 1 ]]; then
-    CMD=(torchrun --nproc_per_node="$NUM_GPUS" inference.py)
+    CMD=(torchrun --master_port="$MASTER_PORT" --nproc_per_node="$NUM_GPUS" inference.py)
 else
     CMD=(python inference.py)
 fi
 
 echo "Starting inference with $NUM_GPUS GPU(s) ..."
 echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-<unset>}"
+echo "MASTER_PORT=$MASTER_PORT"
 printf 'Launch command:'
 printf ' %q' "${CMD[@]}"
 printf ' %q' \

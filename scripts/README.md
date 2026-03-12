@@ -9,16 +9,18 @@
 CUDA_VISIBLE_DEVICES=0 bash scripts/infer_bench.sh
 
 # 4 GPUs in parallel
-CUDA_VISIBLE_DEVICES=0,1,2,3 bash scripts/infer_bench.sh --num_gpus 4
+CUDA_VISIBLE_DEVICES=0,1,2,3 MASTER_PORT=29501 bash scripts/infer_bench.sh --num_gpus 4
 
 # Custom settings
-CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 bash scripts/infer_bench.sh \
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 MASTER_PORT=29511 bash scripts/infer_bench.sh \
     --num_gpus 8 \
     --num_output_frames 126 \
     --output_dir videos/my_experiment
 ```
 
 `infer_bench.sh` does not choose GPUs by itself. GPU visibility is controlled externally via `CUDA_VISIBLE_DEVICES`, and `--num_gpus` only controls the number of worker processes (`torchrun --nproc_per_node`).
+
+For multi-GPU runs, `MASTER_PORT` is also controlled externally and passed through to `torchrun --master_port`. If unset, the script uses `29501`.
 
 If the visible GPU count does not match `--num_gpus`, the script exits before launching inference.
 
@@ -32,6 +34,13 @@ If the visible GPU count does not match `--num_gpus`, the script exits before la
 | `--output_dir` | `videos/MovieGenVideoBench_num32` | Output directory |
 | `--num_gpus` | `1` | Number of worker processes for inference; must match the number of GPUs visible through `CUDA_VISIBLE_DEVICES` |
 | `--num_output_frames` | `126` | Number of **latent** frames to generate (see below) |
+
+Environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `CUDA_VISIBLE_DEVICES` | unset | Controls which GPUs are visible to the script; visible GPU count must equal `--num_gpus` |
+| `MASTER_PORT` | `29501` | Passed to `torchrun --master_port` for multi-GPU runs |
 
 ### Output Structure
 
@@ -265,6 +274,7 @@ For reproducibility, each GPU gets `seed + local_rank`. With 4 GPUs, seeds are 0
 
 - Uses `torchrun` with NCCL backend for distributed inference
 - GPU selection is controlled externally by `CUDA_VISIBLE_DEVICES`
+- `MASTER_PORT` is controlled externally and passed to `torchrun --master_port` (default: `29501`)
 - `--num_gpus` must equal the number of visible GPUs or the script will fail fast
 - `DistributedSampler(shuffle=False, drop_last=True)` distributes prompts evenly
 - **Important**: if `num_prompts % num_gpus != 0`, the last few prompts will be **skipped** (due to `drop_last=True`). For 32 prompts, use 1, 2, 4, or 8 GPUs
