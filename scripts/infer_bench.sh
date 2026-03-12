@@ -20,6 +20,11 @@ OUTPUT_DIR="videos/MovieGenVideoBench_num32"
 NUM_GPUS=1
 NUM_OUTPUT_FRAMES=126
 
+die() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -33,14 +38,28 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if ! [[ "$NUM_GPUS" =~ ^[1-9][0-9]*$ ]]; then
+    die "--num_gpus must be a positive integer, got: $NUM_GPUS"
+fi
+
 # Validate prompt file exists
 if [[ ! -f "$PROMPTS" ]]; then
-    echo "ERROR: Prompt file not found: $PROMPTS"
-    exit 1
+    die "Prompt file not found: $PROMPTS"
 fi
 
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
+
+# Require that the runtime-visible GPU count matches the requested process count.
+# GPU selection is intentionally delegated to the caller via CUDA_VISIBLE_DEVICES.
+VISIBLE_GPUS=$(python -c 'import torch; print(torch.cuda.device_count())')
+if ! [[ "$VISIBLE_GPUS" =~ ^[0-9]+$ ]]; then
+    die "Failed to detect visible GPU count (got: $VISIBLE_GPUS)"
+fi
+
+if [[ "$VISIBLE_GPUS" -ne "$NUM_GPUS" ]]; then
+    die "Visible GPU count ($VISIBLE_GPUS) does not match --num_gpus ($NUM_GPUS). Set CUDA_VISIBLE_DEVICES externally so the visible devices match the requested process count."
+fi
 
 # ---------------------------------------------------------------------------
 # 1. Generate prompts.csv
@@ -73,6 +92,18 @@ else
 fi
 
 echo "Starting inference with $NUM_GPUS GPU(s) ..."
+echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-<unset>}"
+printf 'Launch command:'
+printf ' %q' "${CMD[@]}"
+printf ' %q' \
+    --config_path "$CONFIG" \
+    --checkpoint_path "$CHECKPOINT" \
+    --data_path "$PROMPTS" \
+    --output_folder "$OUTPUT_DIR" \
+    --num_output_frames "$NUM_OUTPUT_FRAMES" \
+    --use_ema \
+    --save_with_index
+printf '\n'
 "${CMD[@]}" \
     --config_path "$CONFIG" \
     --checkpoint_path "$CHECKPOINT" \
