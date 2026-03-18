@@ -5,7 +5,7 @@ set -euo pipefail
 # Batch inference script for Rolling Forcing
 #
 # Usage:
-#   bash scripts/infer_bench.sh --num_gpus 4 --num_output_frames 120
+#   bash scripts/infer_bench.sh --num_gpus 4 --num-frames 123
 #
 # Output:
 #   OUTPUT_DIR/prompts.csv         — index,prompt mapping
@@ -20,11 +20,21 @@ OUTPUT_DIR="videos/MovieGenVideoBench_num32"
 NUM_GPUS=1
 NUM_OUTPUT_FRAMES=120
 MASTER_PORT="${MASTER_PORT:-29501}"
+NUM_FRAMES_ARG=""
+NUM_OUTPUT_FRAMES_ARG=""
 
 die() {
     echo "ERROR: $*" >&2
     exit 1
 }
+
+if command -v python >/dev/null 2>&1; then
+    PYTHON_BIN=python
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN=python3
+else
+    die "Neither python nor python3 was found in PATH"
+fi
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -34,13 +44,28 @@ while [[ $# -gt 0 ]]; do
         --prompts)           PROMPTS="$2";           shift 2 ;;
         --output_dir)        OUTPUT_DIR="$2";        shift 2 ;;
         --num_gpus)          NUM_GPUS="$2";          shift 2 ;;
-        --num_output_frames) NUM_OUTPUT_FRAMES="$2"; shift 2 ;;
+        --num-frames)        NUM_FRAMES_ARG="$2";    shift 2 ;;
+        --num_output_frames) NUM_OUTPUT_FRAMES_ARG="$2"; shift 2 ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
     esac
 done
 
+if [[ -n "$NUM_FRAMES_ARG" ]] && [[ -n "$NUM_OUTPUT_FRAMES_ARG" ]] && [[ "$NUM_FRAMES_ARG" != "$NUM_OUTPUT_FRAMES_ARG" ]]; then
+    die "--num-frames ($NUM_FRAMES_ARG) conflicts with --num_output_frames ($NUM_OUTPUT_FRAMES_ARG)"
+fi
+
+if [[ -n "$NUM_FRAMES_ARG" ]]; then
+    NUM_OUTPUT_FRAMES="$NUM_FRAMES_ARG"
+elif [[ -n "$NUM_OUTPUT_FRAMES_ARG" ]]; then
+    NUM_OUTPUT_FRAMES="$NUM_OUTPUT_FRAMES_ARG"
+fi
+
 if ! [[ "$NUM_GPUS" =~ ^[1-9][0-9]*$ ]]; then
     die "--num_gpus must be a positive integer, got: $NUM_GPUS"
+fi
+
+if ! [[ "$NUM_OUTPUT_FRAMES" =~ ^[1-9][0-9]*$ ]]; then
+    die "--num-frames/--num_output_frames must be a positive integer, got: $NUM_OUTPUT_FRAMES"
 fi
 
 if ! [[ "$MASTER_PORT" =~ ^[1-9][0-9]*$ ]] || [[ "$MASTER_PORT" -gt 65535 ]]; then
@@ -55,9 +80,19 @@ fi
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
 
+NUM_FRAME_PER_BLOCK=$(awk -F: '/^num_frame_per_block:/ {gsub(/[[:space:]]/, "", $2); print $2; exit}' "$CONFIG")
+NUM_FRAME_PER_BLOCK=${NUM_FRAME_PER_BLOCK:-1}
+if ! [[ "$NUM_FRAME_PER_BLOCK" =~ ^[1-9][0-9]*$ ]]; then
+    die "Failed to resolve num_frame_per_block from config: $CONFIG"
+fi
+
+if [[ $((NUM_OUTPUT_FRAMES % NUM_FRAME_PER_BLOCK)) -ne 0 ]]; then
+    die "--num-frames must be divisible by num_frame_per_block ($NUM_FRAME_PER_BLOCK), got: $NUM_OUTPUT_FRAMES"
+fi
+
 # Require that the runtime-visible GPU count matches the requested process count.
 # GPU selection is intentionally delegated to the caller via CUDA_VISIBLE_DEVICES.
-VISIBLE_GPUS=$(python -c 'import torch; print(torch.cuda.device_count())')
+VISIBLE_GPUS=$("$PYTHON_BIN" -c 'import torch; print(torch.cuda.device_count())')
 if ! [[ "$VISIBLE_GPUS" =~ ^[0-9]+$ ]]; then
     die "Failed to detect visible GPU count (got: $VISIBLE_GPUS)"
 fi
@@ -93,12 +128,13 @@ fi
 if [[ $NUM_GPUS -gt 1 ]]; then
     CMD=(torchrun --master_port="$MASTER_PORT" --nproc_per_node="$NUM_GPUS" inference.py)
 else
-    CMD=(python inference.py)
+    CMD=("$PYTHON_BIN" inference.py)
 fi
 
 echo "Starting inference with $NUM_GPUS GPU(s) ..."
 echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-<unset>}"
 echo "MASTER_PORT=$MASTER_PORT"
+echo "NUM_FRAMES=$NUM_OUTPUT_FRAMES (latent frames)"
 printf 'Launch command:'
 printf ' %q' "${CMD[@]}"
 printf ' %q' \

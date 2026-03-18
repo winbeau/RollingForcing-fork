@@ -9,12 +9,12 @@
 CUDA_VISIBLE_DEVICES=0 bash scripts/infer_bench.sh
 
 # 4 GPUs in parallel
-CUDA_VISIBLE_DEVICES=0,1,2,3 MASTER_PORT=29501 bash scripts/infer_bench.sh --num_gpus 4
+CUDA_VISIBLE_DEVICES=0,1,2,3 MASTER_PORT=29501 bash scripts/infer_bench.sh --num_gpus 4 --num-frames 123
 
 # Custom settings
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 MASTER_PORT=29511 bash scripts/infer_bench.sh \
     --num_gpus 8 \
-    --num_output_frames 120 \
+    --num-frames 243 \
     --output_dir videos/my_experiment
 ```
 
@@ -23,6 +23,8 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 MASTER_PORT=29511 bash scripts/infer_bench.
 For multi-GPU runs, `MASTER_PORT` is also controlled externally and passed through to `torchrun --master_port`. If unset, the script uses `29501`.
 
 If the visible GPU count does not match `--num_gpus`, the script exits before launching inference.
+
+`--num-frames` is the preferred script-level flag. It controls the number of **latent frames** passed to `inference.py --num_output_frames`. The legacy `--num_output_frames` flag is still accepted as a compatibility alias.
 
 ### Script Arguments
 
@@ -33,7 +35,8 @@ If the visible GPU count does not match `--num_gpus`, the script exits before la
 | `--prompts` | `prompts/MovieGenVideoBench_num32.txt` | Prompt file (one prompt per line) |
 | `--output_dir` | `videos/MovieGenVideoBench_num32` | Output directory |
 | `--num_gpus` | `1` | Number of worker processes for inference; must match the number of GPUs visible through `CUDA_VISIBLE_DEVICES` |
-| `--num_output_frames` | `120` | Number of **latent** frames to generate (see below) |
+| `--num-frames` | `120` | Preferred flag for the number of **latent** frames to generate (see below) |
+| `--num_output_frames` | alias | Backward-compatible alias for `--num-frames` |
 
 Environment variables:
 
@@ -80,22 +83,24 @@ Video filenames (`video_XXX.mp4`) correspond 1:1 with the CSV index.
 
 ### Frame Count & Duration
 
-The `--num_output_frames` argument specifies the number of **latent** frames. The VAE temporal stride is **4**, so the relationship between latent frames and pixel frames is:
+The `--num-frames` argument specifies the number of **latent** frames. The script forwards it to `inference.py --num_output_frames`. The VAE temporal stride is **4**, so the relationship between latent frames and pixel frames is:
 
 ```
 pixel_frames = (latent_frames - 1) * 4 + 1
 duration     = pixel_frames / 16 fps
 ```
 
-| `--num_output_frames` (latent) | Pixel frames | Duration |
+| `--num-frames` (latent) | Pixel frames | Duration |
 |---|---|---|
 | 21 (default of inference.py) | 81 | ~5.1 s |
 | 42 | 165 | ~10.3 s |
 | 63 | 249 | ~15.6 s |
 | 84 | 333 | ~20.8 s |
 | **120** (script default) | **477** | **~29.8 s** |
+| 123 | 489 | ~30.6 s |
+| 243 | 969 | ~60.6 s |
 
-Constraint: `num_output_frames` must be divisible by `num_frame_per_block` (= **3**). Valid values: 21, 24, 27, ..., 120, ...
+Constraint: `--num-frames` must be divisible by `num_frame_per_block`. With the default config, `num_frame_per_block = 3`, so valid values are any positive multiple of 3, including `120`, `123`, and `243`.
 
 ### Latent Space
 
@@ -234,7 +239,7 @@ Negative prompt (from config):
 | Independent first frame | False |
 | Uniform timestep per block (`same_step_across_blocks`) | True |
 
-Frames are grouped into blocks of 3 latent frames for joint denoising. With `--num_output_frames 120`, this yields **40 blocks**.
+Frames are grouped into blocks of 3 latent frames for joint denoising. With `--num-frames 120`, this yields **40 blocks**.
 
 ### Rolling Window
 
@@ -275,6 +280,7 @@ For reproducibility, each GPU gets `seed + local_rank`. With 4 GPUs, seeds are 0
 - Uses `torchrun` with NCCL backend for distributed inference
 - GPU selection is controlled externally by `CUDA_VISIBLE_DEVICES`
 - `MASTER_PORT` is controlled externally and passed to `torchrun --master_port` (default: `29501`)
+- `--num-frames` is the preferred latent-frame flag; `--num_output_frames` remains as a compatibility alias
 - `--num_gpus` must equal the number of visible GPUs or the script will fail fast
 - `DistributedSampler(shuffle=False, drop_last=True)` distributes prompts evenly
 - **Important**: if `num_prompts % num_gpus != 0`, the last few prompts will be **skipped** (due to `drop_last=True`). For 32 prompts, use 1, 2, 4, or 8 GPUs
