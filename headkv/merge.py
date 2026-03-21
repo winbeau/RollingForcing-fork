@@ -99,9 +99,24 @@ class MergeStrategy:
                 continue
 
             if block.seen_slots[local_idx]:
-                raise ValueError(
-                    f"Duplicate merge frame slot for seq={idx}, block={block_id}, t={t_val}."
-                )
+                # Rolling forcing re-caches the same block with progressively
+                # better denoised predictions.  Reset the block so the running
+                # average restarts with the updated KV.
+                block.seen_slots = [False] * self.block_frames
+                block.complete_count = 0
+                block.merged_anchor = None
+                if block.sum_k is not None:
+                    block.sum_k.zero_()
+                    block.sum_v.zero_()
+                # Also remove from "complete" bookkeeping if present.
+                complete_set = self._complete_block_sets[idx]
+                complete_ids = self._complete_block_ids[idx]
+                if block_id in complete_set:
+                    complete_set.discard(block_id)
+                    # deque doesn't support O(1) remove; rebuild
+                    self._complete_block_ids[idx] = deque(
+                        bid for bid in complete_ids if bid != block_id
+                    )
 
             frame_k = k_seq[start:end]
             frame_v = v_seq[start:end]

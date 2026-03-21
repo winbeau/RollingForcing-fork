@@ -205,8 +205,6 @@ class CausalInferencePipeline(torch.nn.Module):
             shared_timestep[:, index * self.num_frame_per_block:(index + 1) * self.num_frame_per_block] *= current_timestep
 
 
-        last_cached_block = -1  # track which block was last clean-cached
-
         # Denoising loop with rolling forcing
         for window_index in range(window_num):
 
@@ -283,25 +281,21 @@ class CausalInferencePipeline(torch.nn.Module):
 
 
             # rerun with timestep zero to update the clean cache, which is also detached from the computation graph
-            # Only cache start_block if it hasn't been cached yet (avoids duplicate
-            # merge frame slots during the ramp-up phase where start_block stays at 0).
-            if start_block > last_cached_block:
-                with torch.no_grad():
-                    context_timestep = torch.ones_like(current_timestep) * self.args.context_noise
+            with torch.no_grad():
+                context_timestep = torch.ones_like(current_timestep) * self.args.context_noise
 
-                    # only cache the first block
-                    denoised_pred_clean = denoised_pred[:,:self.num_frame_per_block]
-                    context_timestep_clean = context_timestep[:,:self.num_frame_per_block]
-                    self.generator(
-                        noisy_image_or_video=denoised_pred_clean,
-                        conditional_dict=conditional_dict,
-                        timestep=context_timestep_clean,
-                        kv_cache=self.kv_cache_clean,
-                        crossattn_cache=self.crossattn_cache,
-                        current_start=current_start_frame * self.frame_seq_length,
-                        cache_update_mode="clean",
-                    )
-                    last_cached_block = start_block
+                # only cache the first block
+                denoised_pred_clean = denoised_pred[:,:self.num_frame_per_block]
+                context_timestep_clean = context_timestep[:,:self.num_frame_per_block]
+                self.generator(
+                    noisy_image_or_video=denoised_pred_clean,
+                    conditional_dict=conditional_dict,
+                    timestep=context_timestep_clean,
+                    kv_cache=self.kv_cache_clean,
+                    crossattn_cache=self.crossattn_cache,
+                    current_start=current_start_frame * self.frame_seq_length,
+                    cache_update_mode="clean",
+                )
 
             if profile:
                 block_end.record()
