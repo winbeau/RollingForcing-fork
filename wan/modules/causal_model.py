@@ -219,7 +219,7 @@ class CausalWanSelfAttention(nn.Module):
                         kv_cache=kv_cache,
                         current_start=current_start,
                         grid_sizes=grid_sizes,
-                        freqs=self.freqs,
+                        freqs=freqs,
                         start_frame=current_start_frame,
                         cache_update_mode=cache_update_mode,
                     )
@@ -241,7 +241,7 @@ class CausalWanSelfAttention(nn.Module):
                             kv_cache=kv_cache,
                             current_start=current_start,
                             grid_sizes=grid_sizes,
-                            freqs=self.freqs,
+                            freqs=freqs,
                             start_frame=current_start_frame,
                         )
             else:
