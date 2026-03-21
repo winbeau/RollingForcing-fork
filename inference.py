@@ -33,6 +33,12 @@ parser.add_argument("--seed", type=int, default=0, help="Random seed")
 parser.add_argument("--num_samples", type=int, default=1, help="Number of samples to generate per prompt")
 parser.add_argument("--save_with_index", action="store_true",
                     help="Whether to save the video using the index or prompt as the filename")
+parser.add_argument("--profile", action="store_true", help="Enable profiling")
+parser.add_argument("--use_headkv", action="store_true", help="Enable HeadKV per-head adaptive caching")
+parser.add_argument("--use_adaptive_headkv", action="store_true",
+                    help="Use AdaptiveKVCache with composable strategies (requires --use_headkv)")
+parser.add_argument("--headkv_config", type=str, default=None,
+                    help="Path to HeadKV config YAML to merge (e.g. configs/rolling_forcing_headkv.yaml)")
 args = parser.parse_args()
 
 # Initialize distributed inference
@@ -54,6 +60,20 @@ torch.set_grad_enabled(False)
 config = OmegaConf.load(args.config_path)
 default_config = OmegaConf.load("configs/default_config.yaml")
 config = OmegaConf.merge(default_config, config)
+
+# Merge HeadKV config if provided
+if args.headkv_config:
+    headkv_config = OmegaConf.load(args.headkv_config)
+    config = OmegaConf.merge(config, headkv_config)
+
+# CLI overrides for HeadKV flags
+cli_overrides = {}
+if args.use_headkv:
+    cli_overrides["use_headkv"] = True
+if args.use_adaptive_headkv:
+    cli_overrides["use_adaptive_headkv"] = True
+if cli_overrides:
+    config = OmegaConf.merge(config, OmegaConf.create(cli_overrides))
 
 # Initialize pipeline
 if hasattr(config, 'denoising_step_list'):
@@ -172,6 +192,7 @@ for i, batch_data in tqdm(enumerate(dataloader), disable=(local_rank != 0)):
         text_prompts=prompts,
         return_latents=True,
         initial_latent=initial_latent,
+        profile=args.profile,
     )
     current_video = rearrange(video, 'b t c h w -> b t h w c').cpu()
     all_video.append(current_video)
